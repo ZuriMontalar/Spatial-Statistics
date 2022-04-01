@@ -1,0 +1,325 @@
+---
+title: "Estudio de plomo en sangre en población infantil"
+subtitle: "Práctica - Redes de localizaciones"
+author: "Zuri Montalar Mendoza"
+date: "03/06/2020"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<div style="text-align: justify">
+
+```{r include=FALSE,message=FALSE}
+setwd("~/BIOESTADÍSTICA máster/III. Modelización estadística/Estadística espacial/Prácticas-EE/Redes de localizaciones")
+
+library(sf) # Libreria que define las estructuras básicas para datos espaciales vectoriales
+library(raster)
+library(spdep) # Libreria para el cálculo de las relaciones de vecindad entre regiones
+```
+
+En este trabajo realizaremos un estudio de plomo en sangre en población infantil, con el objetivo de establecer la relación entre concentración de plomo en sangre (Pb-S) y parámetros demográficos y socioeconómicos, en una población infantil a partir de los datos en sectores de Valencia (Venezuela).
+
+<!-- # Datos MAL. tal cual -->
+<!-- sector<-1:31 -->
+<!-- categorizacion<-as.factor(c(2,3,2,2,2,2,2,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,3)) -->
+<!-- levels(categorizacion)<-c("A","B","C") -->
+<!-- N_ninos<-c(5,10,6,14,7,9,5,17,14,11,16,15,9,13,10,12,9,8,7,13,11,14,10,9,6,8,8,6,7,8,9) -->
+<!-- Pb_sup<-c(2,5,2,3,3,5,1,4,1,2,1,5,0,3,4,7,4,3,3,7,9,11,5,4,2,3,5,2,3,6,4) -->
+<!-- datos<-data.frame(sector=sector,categorizacion=categorizacion,N_ninos=N_ninos,Pb_sup=Pb_sup) -->
+
+Primero creamos los datos.
+
+```{r}
+# Datos
+sector<-c(1:14,23,24,15,16,25,26,17,18,27,28,19,20,29,30,21,22,31)
+categorizacion<-as.factor(c(2,3,2,2,2,2,2,1,1,1,1,1,1,1,3,3,3,3,3,
+                            3,3,3,3,3,3,3,3,2,3,3,3))
+levels(categorizacion)<-c("A","B","C")
+N_ninos<-c(5,10,6,14,7,9,5,17,14,11,16,15,9,13,10,9,10,12,6,8,9,
+           8,8,6,7,13,7,8,11,14,9)
+Pb_sup<-c(2,5,2,3,3,5,1,4,1,2,1,5,0,3,5,4,4,7,2,3,4,3,5,2,3,7,3,6,9,11,4)
+datos<-data.frame(sector=sector,categorizacion=categorizacion,
+                  N_ninos=N_ninos,Pb_sup=Pb_sup)
+```
+
+
+<!-- ```{r message=FALSE} -->
+<!-- # Creación del mapa según categorización. -->
+<!-- library(raster) -->
+<!-- map1<-matrix(c(2,2,2,2,1,1,1,3,3,3,3,3,2,2,1,1,1,1,3,3,3,3,NA,NA,NA,NA,NA,NA,3,3,3,3,3,NA,NA,NA,NA,NA,NA,3,3,3,2,NA),ncol=4) -->
+<!-- r1<-raster(map1) -->
+<!-- print(r1) -->
+<!-- plot(r1) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- summary(datos[,-1]) -->
+
+<!-- hist(N_ninos) -->
+<!-- hist(Pb_sup) -->
+<!-- ``` -->
+
+A continuación, creamos el mapa y estudiamos si hay correlación espacial en los datos.
+
+```{r message=FALSE}
+# Creación del mapa
+map1<-matrix(c(rep(1,22),rep(NA,6),rep(1,5),rep(NA,6),rep(1,4),NA),ncol=4)
+raster1<-raster(map1)
+map.poly<-rasterToPolygons(raster1)
+map.nb<-poly2nb(map.poly)
+Vecinos<-nb2WB(map.nb) # transforma el sistema de vecindades en listas de vecinos
+
+# Estudiamos la correlación espacial en los datos
+moran.test(datos$Pb_sup,nb2listw(map.nb)) # Test de Moran
+geary.test(datos$Pb_sup,nb2listw(map.nb)) # Test de Geary
+```
+
+Con los tests I de Morgan y C de Geary hemos obtenido unos p-valores de 0.0098 y 0.0111, respectivamente, por lo que ambos nos indican que rechazamos las hipótesis nulas de que no haya correlación espacial en los datos y consideramos entonces que sí la hay. A continuación representaremos varios mapas.
+
+<!-- colorines: -->
+<!-- library(colorRamps) -->
+<!-- Paleta2<-cyan2yellow(5) -->
+
+```{r, warning=FALSE, message=FALSE, fig.width=10, fig.height=6, fig.align="center"}
+# Definimos una paleta de colores para pintar los mapas
+Paleta<-colorRampPalette(c("Yellow2","red3"))(6)
+par(mfrow=c(1,2))
+
+# Pintamos un mapa con el número de vecinos
+plot(map.poly,col=Paleta[findInterval(Vecinos$num,c(0,4,5,6,7,8,15))])
+title("Número de vecinos")
+legend("topright",c("3","4","5","6","7","8"),fill=Paleta)
+
+# Para pintar una zona y sus vecinas. Por ejemplo, la zona 29
+zona<-function(i){
+por<-rep(1,32)
+por[which(datos$sector==i)]<-6
+por[map.nb[[which(datos$sector==i)]]]<-3
+plot(map.poly,col=Paleta[por])
+legend("topright",c("no vecinas", "vecinas",
+                    paste("zona", i )),fill=Paleta[c(1,3,6)])
+title(paste("La zona", i, "y sus vecinas"))
+}
+zona(29)
+```
+
+Como estamos ante una red regular, podemos presentar modelos de primer orden (que consideran vecinas a las localizaciones contiguas en la fia o la columna), o de segundo orden (que permiten además considerar vecinos en diagonal). Nosotros hemos optado por esta segunda opción.
+
+
+```{r}
+par(mfrow=c(1,3), mar=c(0,0,3,0))
+# Mapa de zonas por categorización
+plot(map.poly,col=Paleta[findInterval(datos$categorizacion,1:3)])
+title("Zonas según categorización")
+legend("topright",c("A","B","C"),fill=Paleta)
+
+# Mapa según nº de niños estudiados
+plot(map.poly,col=Paleta[findInterval(datos$N_ninos,c(0,7,10,13,15,18))])
+title("Nº de niños estudiados")
+legend("topright",c("<7","7-10","10-13","13-15",">=15"),fill=Paleta)
+
+# Mapa según nº de niños con nivel alto de Pb
+plot(map.poly,col=Paleta[findInterval(datos$Pb_sup,c(0,2,4,6,8,15))])
+title("Nº de niños con \n nivel alto de Pb")
+legend("topright",c("<2","2-4","4-6","6-8",">=8"),fill=Paleta)
+```
+
+<!-- para ver si hay correlacion espacial en los datso; y en los residuos de los ajustes -->
+<!-- moran.test -->
+<!-- geary.test -->
+
+<!-- construir la variable de interaccion espacial -->
+
+
+## Modelado
+
+Pensamos que sería conveniente una dsitribución Binomial: tendremos `r` éxitos, que será la cantidad de niños con niveles altos de Pb, sobre un total de `n`, nº de niños. Por tanto, estaremos ante una regresión logística. En caso de introducir la dependencia espacial entre las zonas, estaremos ante un modelo autologístico.
+
+### Modelo 1
+
+En este primer modelo únicamente incluiremos el intercepto.
+
+```{r}
+modelo1<-glm(cbind(datos$Pb_sup,datos$N_ninos-datos$Pb_sup)~1,
+             family=binomial(link=logit))
+summary(modelo1)
+shapiro.test(resid(modelo1)) # Estudio normalidad de los residuos
+
+#Pintamos un mapa con los residuos
+plot(map.poly,col=Paleta[findInterval(resid(modelo1),c(-10,-2,-1,0,1,2,10))])
+title("Residuos del modelo 1")
+legend("topright",c("< -2","(-2, -1)","(-1, 0)","(0, 1)","(1, 2)","> 2"),fill=Paleta)
+
+# Estudiamos la autocorrelación espacial en los residuos
+moran.test(resid(modelo1),nb2listw(map.nb)) # Test de Moran
+geary.test(resid(modelo1),nb2listw(map.nb)) # Test de Geary
+```
+
+Como cabía esperar, tenemos que los residuos de este modelo siguen teniendo autocorrelación espacial.
+
+## Modelo 2
+
+Introducimos como variable la categorización de la zona para intentar mejorar el ajuste.
+
+```{r}
+modelo2<-glm(cbind(datos$Pb_sup,datos$N_ninos-datos$Pb_sup)~categorizacion,
+             family=binomial(link=logit))
+summary(modelo2)
+shapiro.test(resid(modelo2)) # Estudio normalidad de los residuos
+
+#Pintamos un mapa con los residuos
+plot(map.poly,col=Paleta[findInterval(resid(modelo2),c(-10,-2,-1,0,1,2,10))])
+title("Residuos del modelo 2")
+legend("topright",c("< -2","(-2, -1)","(-1, 0)","(0, 1)","(1, 2)","> 2"),fill=Paleta)
+
+# Estudiamos la autocorrelación espacial en los residuos
+moran.test(resid(modelo2),nb2listw(map.nb)) # Test de Moran
+geary.test(resid(modelo2),nb2listw(map.nb)) # Test de Geary
+```
+
+Una vez intrudicida como variable explicativa la única que tenemos directamente como datos, la categorización de las zonas, los test I de Moran y C de Geary, con p-valores de 0.5042 y 0.3569, respectivamente, nos indican que ya no tenemos autocorrelación espacial. Hemos obtenido que todos los términos del modelo son significativos. Además, observando los coeficientes obtenidos, tenemos que cuanto más baja es la calidad de vida de la zona, mayor es la probabilidad de que un niño de esa zona tenga niveles de plomo superiores a 10 $\mu g/dl$.
+
+Vemos que los residuos del modelo se encuentran aproximadamente dentro del intervalo [-2,2]. También hemos obtenido un p-valor de 0.089 en el test Shapiro para estudiar la normalidad de los residuos, por lo que al ser mayor que el nivel de significatividad escogido durante todo el trabajo (del 5%), no tenemos evidencia estadística suficiente para rechazar que los residuos se distribuyan con una Normal.
+
+Con todo ello, pensamos que este *modelo2* podría ser adecuado. Aún así, seguimos tratando de mejorarlo.
+
+## Modelo 3
+
+En este caso introducimos como variable explicativa, además de la categorización, la media de proporciones de casos en las zonas vecinas.
+
+```{r}
+# Calculamos la proporción de casos
+prop<-datos$Pb_sup/datos$N_ninos
+
+# Mapa según proporción de niños con nivel alto de Pb
+plot(map.poly,col=Paleta[findInterval(prop,c(-2,0.1,0.3,.5,.7,.9,2))])
+title("Proporción de niños con nivel alto de Pb")
+legend("topright",c("<0.1","0.1-0.3","0.3-0.5","0.5-0.7","0.7-0.9",">0.9"),fill=Paleta)
+
+# Función que calcula la media de las proporciones de las zonas vecinas
+prop.v<-function(i){
+  prop.vecinos<-prop[map.nb[[which(datos$sector==i)]]]
+  mean(prop.vecinos)
+  }
+
+# Covariable que recoge, para cada zona, la media de las
+# proporciones de las zonas vecinas
+media.prop<-sapply(datos$sector,prop.v)
+
+modelo3<-glm(cbind(datos$Pb_sup,datos$N_ninos-datos$Pb_sup)~categorizacion+
+               media.prop, family=binomial(link=logit))
+summary(modelo3)
+shapiro.test(resid(modelo3)) # Estudio normalidad de los residuos
+
+# Pintamos un mapa con los residuos
+plot(map.poly,col=Paleta[findInterval(resid(modelo3),c(-10,-2,-1,0,1,2,10))])
+title("Residuos del modelo 3")
+legend("topright",c("< -2","(-2, -1)","(-1, 0)","(0, 1)","(1, 2)","> 2"),fill=Paleta)
+
+# Estudiamos los residuos del modelo
+par(mfrow=c(2,2)); plot(modelo3); par(mfrow=c(1,1))
+
+# Estudiamos la autocorrelación espacial en los residuos
+moran.test(resid(modelo3),nb2listw(map.nb)) # Test de Moran
+geary.test(resid(modelo3),nb2listw(map.nb)) # Test de Geary
+```
+
+En este modelo 3 también tenemos los residuos dentro del intervalo [-2,2] y no tenemos evidencia para rechazar que sean normales, con un p-valor de 0.1662 en el test de Shapiro. Además, los p-valores de los test de autocorrelación espacial nos indican que los residuos tampoco siguen un patrón, como cabía esperar.
+
+Sin embargo, el coeficiente asociado a la variable explicativa añadida en este modelo, *media.prop*, no es significativo. De hecho, si comparamos los AIC de este modelo con el anterior, tenemos que son de 114.63 en este caso y 113.34 en el *modelo2*, lo que nos indicaría que tal vez sería más recomendable el no intoducir la variable de la media de proporciones de casos en las zonas vecinas.
+
+```{r}
+1-pchisq(modelo2$deviance-modelo3$deviance,modelo2$df.residual-modelo3$df.residual)
+```
+
+Además, si hacemos el test $\chi^2$ para contrastar la diferencia de deviances entre este modelo y el anterior, tenemos que esa diferencia no es significativa, y que por tanto es preferible quedarnos con el modelo más sencillo, es decir, el *modelo2*.
+
+
+# Modelo 4
+
+Para estudiar si obtenemos distintos resultados eligiendo una variable explicativa que tenga en cuenta a los vecinos pero de forma distinta, creamos un modelo que cuyas variables explicativas son la categorización y el número de casos en las zonas vecinas dividido por el número de casos esperados en las zonas vecinas.
+
+```{r}
+# Calculamos los casos esperados en cada zona 
+esperados<-N_ninos*sum(Pb_sup)/sum(N_ninos)
+
+# Mapa de casos esperados en cada zona
+plot(map.poly,col=Paleta[findInterval(esperados,1:7)])
+title("Casos esperados con nivel alto de Pb")
+legend("topright",c("<2","2-3","3-4","4-5","5-6",">6"),fill=Paleta)
+
+# función que calcula el número de casos en una zona entre los
+# esperados en sus zonas vecinas
+num.esp<-function(i){
+  sum(datos$Pb_sup[map.nb[[which(datos$sector==i)]]])/
+    (sum(datos$esperados[map.nb[[which(datos$sector==i)]]])+0.5)
+}
+
+num.esp.vecinos<-sapply(datos$sector,num.esp) # covariable que vamos a utilizar
+
+modelo4<-glm(cbind(datos$Pb_sup,datos$N_ninos-datos$Pb_sup)~categorizacion+
+               num.esp.vecinos, family=binomial(link=logit))
+summary(modelo4)
+shapiro.test(resid(modelo4)) # Estudio normalidad de los residuos
+
+# Pintamos un mapa con los residuos
+plot(map.poly,col=Paleta[findInterval(resid(modelo4),c(-10,-2,-1,0,1,2,10))])
+title("Residuos del modelo 4")
+legend("topright",c("< -2","(-2, -1)","(-1, 0)","(0, 1)","(1, 2)","> 2"),fill=Paleta)
+
+# Estudiamos los residuos del modelo
+par(mfrow=c(2,2)); plot(modelo4); par(mfrow=c(1,1))
+
+# Estudiamos la autocorrelación espacial en los residuos
+moran.test(resid(modelo4),nb2listw(map.nb)) # Test de Moran
+geary.test(resid(modelo4),nb2listw(map.nb)) # Test de Geary
+```
+
+Los resultados obtenidos son muy similares a los del modelo anterior, en cuanto a que también se cumple la Normalidad de los residuos, que estos son menores que 2 en valor absoluto y que no hay autocorrelación espacial en los mismos tras aplicar el modelo. Además, hemos obtenido un AIC de 115.33, que es un poco mayor que el de los modelos anteriores.
+
+```{r}
+1-pchisq(modelo2$deviance-modelo4$deviance,modelo2$df.residual-modelo4$df.residual)
+```
+
+Cuando realizamos el test $\chi^2$ para contrastar la diferencia de deviances entre este modelo y el que sólo incluía como variable explicativa la categorización de las zonas (*modelo2*), obtenemos un p-valor de 0.9, lo cual indica que esa diferencia de deviances no es significativa, y que por tanto es preferible el modelo más sencillo.
+
+Con todo, tenemos que en ninguno de los dos modelos en los que hemos añadido una variable explicativa que tenga en cuenta a los vecinos es mejor que el modelo que únicamente considera la categorización. Por tanto, esa variable sobre la calidad de vida de cada zona parece ser suficiente para explicar la estructura espacial que se nos presentaba.
+
+<!-- # Modelo 5 -->
+
+<!-- Por último, vamos a crear un modelo que únicamente tenga en cuenta como variable explicativa la media de proporciones de casos en las zonas vecinas (*media.prop*), y no la categorización de las zonas. -->
+
+<!-- ```{r} -->
+<!-- modelo5<-glm(cbind(datos$Pb_sup,datos$N_ninos-datos$Pb_sup)~ -->
+<!--                media.prop, family=binomial(link=logit)) -->
+<!-- summary(modelo5) -->
+<!-- shapiro.test(resid(modelo5)) # Estudio normalidad de los residuos -->
+
+<!-- # Pintamos un mapa con los residuos -->
+<!-- plot(map.poly,col=Paleta[findInterval(resid(modelo5),c(-10,-2,-1,0,1,2,10))]) -->
+<!-- title("Residuos del modelo 5") -->
+<!-- legend("topright",c("< -2","(-2, -1)","(-1, 0)","(0, 1)","(1, 2)","> 2"),fill=Paleta) -->
+
+<!-- # Estudiamos los residuos del modelo -->
+<!-- par(mfrow=c(2,2)); plot(modelo5); par(mfrow=c(1,1)) -->
+
+<!-- # Estudiamos la autocorrelación espacial en los residuos -->
+<!-- moran.test(resid(modelo5),nb2listw(map.nb)) # Test de Moran -->
+<!-- geary.test(resid(modelo5),nb2listw(map.nb)) # Test de Geary -->
+<!-- ``` -->
+
+
+<!-- (...) -->
+
+
+
+
+
+
+
+

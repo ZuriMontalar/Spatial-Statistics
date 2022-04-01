@@ -1,0 +1,558 @@
+---
+title: "Tarea 2. Patrones puntuales"
+subtitle: "Estadística espacial"
+author: "Zuri Montalar"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=TRUE,echo=FALSE,warning=FALSE, error=FALSE)
+```
+
+
+En este trabajo exploraremos los patrones puntuales de los datos que tenemos de robles, arces, secuoyas y pinos.
+
+```{r}
+setwd("~/BIOESTADÍSTICA máster/III. Modelización estadística/Estadística espacial/Prácticas-EE/Patrones puntuales")
+```
+
+
+# Robles
+```{r}
+robles<-matrix(scan('robles.d'),ncol=2,byrow=T)
+# Asignación del nombre patron para aplicar el código
+patron<-robles
+```
+
+
+## Conteos por quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Cargamos las funciones
+source('utilpp.r')
+# Representación del patrón puntual en una región cuadrada
+par(pty='s')
+plot(patron,pch=20,xlab='x',ylab='y')
+```
+
+### Análisis mediante un grid de quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+par(mfrow=c(1,1),pty="s")
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibu.qua() dibuja las líneas de un grid de quadrats (4x4)
+dibu.qua(4,4)
+# La función cuenta.qua() contabiliza cuantos sucesos hay en cada quadrat
+nump.qua<-c(cuenta.qua(patron,4,4))
+# El test chi-cuadrado de bondad de ajuste con los conteos observados y con todos los esperados iguales
+chisq.test(nump.qua)
+```
+
+Al realizar el test $\chi^2$ de bondad de ajuste con los conteos observados y con todos los esperados iguales, tenemos un p-valore de 5.502e-06. Con una significatividad del 5% (que es la que consideraremos a lo largo de todo el trabajo), y siendo una prueba bilateral, tenemos que rechazamos la hipótesis nula de aleatoriedad espacial completa, y en este caso un p-valor tan pequeño indicaría que se trata de agrupamiento.
+
+### Análisis mediante un muestreo con quadrats aleatorios \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=6, fig.height=6, fig.align="center"}
+# La función Simqalea() simula los centros de 20 quadrats de radio 0.08
+centros.qua<-Simqalea(20,0.08)
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibalea.qua() dibuja los quadrats circulares simulados
+dibalea.qua(centros.qua)
+# La función cupenl.qua() calcula cuantos sucesos hay en cada quadrat
+nump.qua<-cupenl.qua(patron,centros.qua)
+# La función indices.qua() calcula los índices de agrupación
+indices.qua(nump.qua)
+```
+
+Al realizar el análisis de *Robles* mediante un muestreo con quadrats aleatorios, con varias simulaciones obtenemos resultados que podrían ser propios de un patrón aleatorio, o de uno de agrupamiento:
+
+En algunas ocasiones, tenemos que la varianza relativa obtenida es muy cercana a 1 (y por tanto el índice de David-Moore de prácticamente 0), y la desigualdad de Lloyd de aproximadamente 1, lo que podría hacernos pensar que que se trata de un patrón de aleatoriedad espacial completa. Sin embargo, en otras simulaciones tenemos mayores valores de todos estos índices que nos harían pensar que tal vez se trata de un patrón de agrupamiento.
+
+
+## Métodos de distancia
+### Distancias entre sucesos \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# Calculamos todas las distancias entre los sucesos
+# La función genérica dist() crea una matriz (n,n) de distancias
+# La función sort() ordena y convierte en vector las n*(n-1)/2 distancias
+distan<-sort(dist(patron))
+par(mfrow=c(1,2))
+hist(distan)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica
+Hgorro <- ecdf(distan)
+plot(Hgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Ht()
+plot(sapply(distan,Ht),Hgorro(distan),type="l")
+# La línea roja marca el ajuste perfecto con la aleatoridad espacial completa
+abline(0,1,col=2)
+# La función Henvl() calcula 19 simulaciones de patrones completamente aleatorios
+# y determina el mínimo y el máximo de la función H empírica para cada distancia
+lims<-Henvl(19,patron)
+# Se pintan en verde los límites inferior y superior de las simulaciones
+lines(sapply(lims$xl,Ht),Hgorro(distan),col="green")
+lines(sapply(lims$xu,Ht),Hgorro(distan),col="green")
+```
+
+
+### Distancias al vecino más próximo \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdvmp() calcula las distancias al vecino más próximo
+distvmp<-sort(calcdvmp(patron))
+par(mfrow=c(1,2))
+hist(distvmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica
+Ggorro <- ecdf(distvmp)
+plot(Ggorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distvmp,Gt,nrow(patron)),Ggorro(distvmp),type="l")
+abline(0,1,col=2)
+lims<-Genvl(19,patron)
+lines(sapply(lims$xl,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+```
+
+En esta representación de las distancias al vecino más próximo, tenemos que la línea roja es el ajuste perfecto, y en negro vemos la comparativa entre la distribución empírica y la teórica. Al realizar simulaciones de patrones completamente aleatorios, vemos que nuestros datos están dentro de esos valores simulados, y por tanto este método nos lleva a pensar que estamos ante un patrón completamente aleatorio.
+
+
+### Distancias de un punto al suceso más próximo \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdpsmp() calcula las distancias desde 8*8 puntos aleatorios a los sucesos más próximos
+distpsmp<-sort(caldpsmp(patron,8))
+par(mfrow=c(1,2))
+hist(distpsmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica
+Fgorro <- ecdf(distpsmp)
+plot(Fgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distpsmp,Gt,nrow(patron)),Fgorro(distpsmp),type="l")
+abline(0,1,col=2)
+lims<-Fenvl(19,patron,8)
+lines(sapply(lims$xl,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+```
+
+Al evaluar las distancias de un punto al suceso más próximo, tenemos de nuevo que que nuestros datos están dentro de los valores simulados (que siguen un patrón completamente aleatorio), y por tanto este método también nos lleva a pensar que estamos ante aleatoriedad espacial completa.
+
+## Conclusiones *robles*
+Los resultados obtenidos son un poco contradictorios, pues los métodos de distancias nos llevan a pensar que se trata de aleatoriedad espacial completa, mientras que con el método de quadrats no era esclarecedor si estábamos frente a un patrón aleatorio o frente a uno de agrupamiento. Sin embargo, sabemos que los métodos de distancias son más fiables que los de quadrats, por lo que pensamos que tal vez sí se trate de aleatoriedad espacial.
+
+
+# Arces
+```{r}
+arces<-matrix(scan('arces.d'),ncol=2,byrow=T)
+# Asignación del nombre patron para aplicar el código
+patron<-arces
+```
+
+## Conteos por quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Cargamos las funciones
+source('utilpp.r')
+# Representación del patrón puntual en una región cuadrada
+par(pty='s')
+plot(patron,pch=20,xlab='x',ylab='y')
+```
+
+### Análisis mediante un grid de quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+par(mfrow=c(1,1),pty="s")
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibu.qua() dibuja las líneas de un grid de quadrats (4x4)
+dibu.qua(4,4)
+# La función cuenta.qua() contabiliza cuantos sucesos hay en cada quadrat
+nump.qua<-c(cuenta.qua(patron,4,4))
+# El test chi-cuadrado de bondad de ajuste con los conteos observados y con todos los esperados iguales
+chisq.test(nump.qua)
+```
+
+El p-valor obtenido de 2.2e-16 en el test $\chi^2$ nos hace pensar que estamos ante un patrón de agrupamiento.
+
+### Análisis mediante un muestreo con quadrats aleatorios \newline
+
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# La función Simqalea() simula los centros de 20 quadrats de radio 0.08
+centros.qua<-Simqalea(20,0.08)
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibalea.qua() dibuja los quadrats circulares simulados
+dibalea.qua(centros.qua)
+# La función cupenl.qua() calcula cuantos sucesos hay en cada quadrat
+nump.qua<-cupenl.qua(patron,centros.qua)
+# La función indices.qua() calcula los índices de agrupación
+indices.qua(nump.qua)
+```
+
+Cuando trabajamos con quadrats aleatorios, 3 de los 4 índices de agrupamiento que hemos calculado apuntan a que estamos ante un patrón agregado: la varianza relativa es en torno a 7 en algunas simulaciones, lo que indicaría que la varianza es aproximadamente 7 veces mayor que la media; el índice de David-Moore en torno a 6 (definido como la varianza relativa -1 y estando por tanto centrado en 0 en caso de aleatoriedad espacial completa); y la desigualdad de Lloyd es mayor que 1. El índice de Morisita es mayor en cuanto el modelo es más agrupado, por lo que nos es de utilidad en comparaciones, pero por sí mismo no es esclarecedor.
+
+
+## Métodos de distancia
+### Distancias entre sucesos \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# Calculamos todas las distancias entre los sucesos
+# La función genérica dist() crea una matriz (n,n) de distancias
+# La función sort() ordena y convierte en vector las n*(n-1)/2 distancias
+distan<-sort(dist(patron))
+par(mfrow=c(1,2))
+hist(distan)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Hgorro <- ecdf(distan)
+plot(Hgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Ht()
+plot(sapply(distan,Ht),Hgorro(distan),type="l")
+# La línea roja marca el ajuste perfecto con la aleatoridad espacial completa
+abline(0,1,col=2)
+# La función Henvl() calcula 19 simulaciones de patrones completamente aleatorios 
+# y determina el mínimo y el máximo de la función H empírica para cada distancia
+lims<-Henvl(19,patron)
+# Se pintan en verde los límites inferior y superior de las simulaciones
+lines(sapply(lims$xl,Ht),Hgorro(distan),col="green")
+lines(sapply(lims$xu,Ht),Hgorro(distan),col="green")
+```
+
+
+### Distancias al vecino más próximo \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdvmp() calcula las distancias al vecino más próximo
+distvmp<-sort(calcdvmp(patron))
+par(mfrow=c(1,2))
+hist(distvmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Ggorro <- ecdf(distvmp)
+plot(Ggorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distvmp,Gt,nrow(patron)),Ggorro(distvmp),type="l")
+abline(0,1,col=2)
+lims<-Genvl(19,patron)
+lines(sapply(lims$xl,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+```
+
+Cuando estudiamos las distancias al vecino más próximo, vemos que hay un predominio de distancias pequeñas, pues la función de distribución empírica (en negro) crece más deprisa que el patrón aleatorio (en verde). Este comportamiento es propio de agrupamiento.
+
+### Distancias de un punto al suceso más próximo \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdpsmp() calcula las distancias desde 8*8 puntos aleatorios a los sucesos más próximos
+distpsmp<-sort(caldpsmp(patron,8))
+par(mfrow=c(1,2))
+hist(distpsmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Fgorro <- ecdf(distpsmp)
+plot(Fgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distpsmp,Gt,nrow(patron)),Fgorro(distpsmp),type="l")
+abline(0,1,col=2)
+lims<-Fenvl(19,patron,8)
+lines(sapply(lims$xl,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+```
+
+Tal como esperábamos, al representar las distancias de un punto al suceso más próximo vemos que hay predominio de distancias grandes porque en los patrones agregados hay muchos espacios vacíos entre puntos, creciendo entonces la distribución empírica más despacio que la distribución teórica.
+
+## Conclusiones *arces*
+
+Tanto haciendo muestreo por quadrats como con métodos de distancias, todas las pruebas realizadas para *arces* indican que estamos ante un caso de agrupamiento.
+
+# Secuoyas
+```{r}
+secuoyas<-matrix(scan('secuoyas.d'),ncol=2,byrow=T)
+# Asignación del nombre patron para aplicar el código
+patron<-secuoyas
+```
+
+## Conteos por quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Cargamos las funciones
+source('utilpp.r')
+# Representación del patrón puntual en una región cuadrada
+par(pty='s')
+plot(patron,pch=20,xlab='x',ylab='y')
+```
+
+### Análisis mediante un grid de quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+par(mfrow=c(1,1),pty="s")
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibu.qua() dibuja las líneas de un grid de quadrats (4x4)
+dibu.qua(4,4)
+# La función cuenta.qua() contabiliza cuantos sucesos hay en cada quadrat
+nump.qua<-c(cuenta.qua(patron,4,4))
+# El test chi-cuadrado de bondad de ajuste con los conteos observados y con todos los esperados iguales
+chisq.test(nump.qua)
+```
+
+El p-valor tras realizar la prueba $\chi^2$ es de 2.2e-16, el cual indica agrupamiento.
+
+### Análisis mediante un muestreo con quadrats aleatorios \newline
+
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# La función Simqalea() simula los centros de 20 quadrats de radio 0.08
+centros.qua<-Simqalea(20,0.08)
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibalea.qua() dibuja los quadrats circulares simulados
+dibalea.qua(centros.qua)
+# La función cupenl.qua() calcula cuantos sucesos hay en cada quadrat
+nump.qua<-cupenl.qua(patron,centros.qua)
+# La función indices.qua() calcula los índices de agrupación
+indices.qua(nump.qua)
+```
+
+Al trabajar con quadrats aleatorios, tenemos una varianza relativa mayor que 1 (alrededor de 5 o 6); el índice de David-Moore en torno positivo por tanto, y la desigualdad de Lloyd es mayor que 1. Estos índices de agrupamiento calculados apuntan también a que estamos ante un patrón de agrupamiento. El índice de Morisita es mayor en cuanto el modelo es más agrupado, por lo que nos es de utilidad en comparaciones.
+
+## Métodos de distancia
+### Distancias entre sucesos \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# Calculamos todas las distancias entre los sucesos
+# La función genérica dist() crea una matriz (n,n) de distancias
+# La función sort() ordena y convierte en vector las n*(n-1)/2 distancias
+distan<-sort(dist(patron))
+par(mfrow=c(1,2))
+hist(distan)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Hgorro <- ecdf(distan)
+plot(Hgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Ht()
+plot(sapply(distan,Ht),Hgorro(distan),type="l")
+# La línea roja marca el ajuste perfecto con la aleatoridad espacial completa
+abline(0,1,col=2)
+# La función Henvl() calcula 19 simulaciones de patrones completamente aleatorios 
+# y determina el mínimo y el máximo de la función H empírica para cada distancia
+lims<-Henvl(19,patron)
+# Se pintan en verde los límites inferior y superior de las simulaciones
+lines(sapply(lims$xl,Ht),Hgorro(distan),col="green")
+lines(sapply(lims$xu,Ht),Hgorro(distan),col="green")
+```
+
+
+### Distancias al vecino más próximo \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdvmp() calcula las distancias al vecino más próximo
+distvmp<-sort(calcdvmp(patron))
+par(mfrow=c(1,2))
+hist(distvmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Ggorro <- ecdf(distvmp)
+plot(Ggorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distvmp,Gt,nrow(patron)),Ggorro(distvmp),type="l")
+abline(0,1,col=2)
+lims<-Genvl(19,patron)
+lines(sapply(lims$xl,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+```
+
+De forma similar a cuando hemos estudiado *arces*, al calcular las distancias al vecino más próximo vemos que predominan las distancias pequeñas ya que la función de distribución empírica (en negro) crece más rápido que el patrón aleatorio (en verde). Esto es característico de los patrones de agrupamiento.
+
+
+### Distancias de un punto al suceso más próximo \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdpsmp() calcula las distancias desde 8*8 puntos aleatorios a los sucesos más próximos
+distpsmp<-sort(caldpsmp(patron,8))
+par(mfrow=c(1,2))
+hist(distpsmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Fgorro <- ecdf(distpsmp)
+plot(Fgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distpsmp,Gt,nrow(patron)),Fgorro(distpsmp),type="l")
+abline(0,1,col=2)
+lims<-Fenvl(19,patron,8)
+lines(sapply(lims$xl,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+```
+
+Sin embargo, cuando representamos las distancias de un punto al suceso más próximo, vemos que la distribución empírica es bastante similar a la teórica, estando generalmente dentro de lo simulado, aunque los últimos valores de la misma parecen ser un poco menores a los propios de un patrón aleatorio. 
+
+## Conclusiones *secuoyas*
+Teniendo en cuenta todo lo anterior, pensamos que no hay independencia entre las localizaciones de los puntos de *secuoyas*, sino que se da agrupamiento.
+
+# Pinos
+```{r}
+source("pinos.r")
+# Asignación del nombre patron para aplicar el código
+patron<-pinos
+```
+
+
+## Conteos por quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Cargamos las funciones
+source('utilpp.r')
+# Representación del patrón puntual en una región cuadrada
+par(pty='s')
+plot(patron,pch=20,xlab='x',ylab='y')
+```
+
+### Análisis mediante un grid de quadrats \newline
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+par(mfrow=c(1,1),pty="s")
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibu.qua() dibuja las líneas de un grid de quadrats (4x4)
+dibu.qua(4,4)
+# La función cuenta.qua() contabiliza cuantos sucesos hay en cada quadrat
+nump.qua<-c(cuenta.qua(patron,4,4))
+# El test chi-cuadrado de bondad de ajuste con los conteos observados y con todos los esperados iguales
+chisq.test(nump.qua)
+```
+
+El p-valor obtenido tras el análisis mediante un grid de quadrats es de 0.9198, que al estar entre 0.025 y 0.975 (considerando una significatividad del 5%) nos lleva a pensar que se trata de aleatoriedad espacial completa.
+
+
+### Análisis mediante un muestreo con quadrats aleatorios \newline
+
+
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# La función Simqalea() simula los centros de 20 quadrats de radio 0.08
+centros.qua<-Simqalea(20,0.08)
+plot(patron,xlim=c(0,1),ylim=c(0,1),xlab="",ylab="",xaxs="i",yaxs="i",pch=20)
+# La función dibalea.qua() dibuja los quadrats circulares simulados
+dibalea.qua(centros.qua)
+# La función cupenl.qua() calcula cuantos sucesos hay en cada quadrat
+nump.qua<-cupenl.qua(patron,centros.qua)
+# La función indices.qua() calcula los índices de agrupación
+indices.qua(nump.qua)
+```
+
+Sin embargo, cuando hacemos un muestreo con quadrats aleatorios obtenemos una varianza relativa inferior a 1 (y por tanto un índice de David-Moore negativo), así como la desigualdad de Lloyd también interior a 1. Estos valores de los índices serían propios de un patrón regular.
+
+
+## Métodos de distancia
+### Distancias entre sucesos \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# Calculamos todas las distancias entre los sucesos
+# La función genérica dist() crea una matriz (n,n) de distancias
+# La función sort() ordena y convierte en vector las n*(n-1)/2 distancias
+distan<-sort(dist(patron))
+par(mfrow=c(1,2))
+hist(distan)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Hgorro <- ecdf(distan)
+plot(Hgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Ht()
+plot(sapply(distan,Ht),Hgorro(distan),type="l")
+# La línea roja marca el ajuste perfecto con la aleatoridad espacial completa
+abline(0,1,col=2)
+# La función Henvl() calcula 19 simulaciones de patrones completamente aleatorios 
+# y determina el mínimo y el máximo de la función H empírica para cada distancia
+lims<-Henvl(19,patron)
+# Se pintan en verde los límites inferior y superior de las simulaciones
+lines(sapply(lims$xl,Ht),Hgorro(distan),col="green")
+lines(sapply(lims$xu,Ht),Hgorro(distan),col="green")
+```
+
+
+### Distancias al vecino más próximo \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdvmp() calcula las distancias al vecino más próximo
+distvmp<-sort(calcdvmp(patron))
+par(mfrow=c(1,2))
+hist(distvmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Ggorro <- ecdf(distvmp)
+plot(Ggorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distvmp,Gt,nrow(patron)),Ggorro(distvmp),type="l")
+abline(0,1,col=2)
+lims<-Genvl(19,patron)
+lines(sapply(lims$xl,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Ggorro(distvmp),col="green")
+```
+
+Cuando representamos las distancias al vecino más próximo, vemos que nuestras observaciones no están dentro de lo que esperamos para un patrón aleatorio, sino que tienen un comportamiento es propio de un patrón regular, porque en este no hay distancias pequeñas, y por tanto la función de distribución de distancias crece más despacio que como crecería un patrón completamente aleatorio.
+
+### Distancias de un punto al suceso más próximo \newline
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, fig.align="center"}
+# La función calcdpsmp() calcula las distancias desde 8*8 puntos aleatorios a los sucesos más próximos
+distpsmp<-sort(caldpsmp(patron,8))
+par(mfrow=c(1,2))
+hist(distpsmp)
+# La función genérica ecdf() calcula la función de distribución acumulada empírica 
+Fgorro <- ecdf(distpsmp)
+plot(Fgorro, verticals= TRUE, do.p = F)
+```
+
+```{r, warning=FALSE, message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Compararemos la distribución empírica con la teórica Gt()
+plot(sapply(distpsmp,Gt,nrow(patron)),Fgorro(distpsmp),type="l")
+abline(0,1,col=2)
+lims<-Fenvl(19,patron,8)
+lines(sapply(lims$xl,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+lines(sapply(lims$xu,Gt,nrow(patron)),Fgorro(distpsmp),col="green")
+```
+
+Al visualizar las distancias de un punto al suceso más próximo junto a simulaciones de patrones completamente aleatorios, vemos que la función de distribución empírica crece un poco más deprisa que la teórica. Esto implicaría que no se dan muchas distancias grandes entre un punto y el suceso más próximo. Ese comportamiento sería propio de un patrón regular, aunque también es cierto que en este caso sólo nos salimos de lo simulado un poco, por lo que tal vez esto no sea del todo concluyente.
+
+
+## Conclusiones *pinos*
+
+Llegamos a conclusiones diferentes según el método utilizado, pero sabemos que los métodos de distancias son más fiables, y estos (junto con el análisis mediante un muestreo con quadrats aleatorios) nos llevan a pensar que se trata de un patrón de regularidad.
+
+
+
+

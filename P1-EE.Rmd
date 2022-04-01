@@ -1,0 +1,262 @@
+---
+title: "Tarea 1 - Geoestadística"
+author: "Zuri Montalar Mendoza"
+date: "04/05/2020"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+
+```
+
+
+<div style="text-align: justify">
+
+```{r include=FALSE, warning=FALSE, error=FALSE, fig.width=12,fig.height=5,fig.align="center"}
+setwd("~/BIOESTADÍSTICA máster/III. Modelización estadística/Estadística espacial/Prácticas-EE/Geoestadística/tarea 1 EE")
+library(knitr)
+library(geoR)
+library(scatterplot3d)
+library(spatial)
+```
+
+En este trabajo realizaremos un análisis de los datos de la elevación del terreno observada en 52 puntos del mismo, así como el estudio de la tendencia y de la estructura del variograma. Con ello, predeciremos la altitud del terreno en el punto de coordenadas (3,3).
+
+## Análisis de los datos
+
+Primero leemos el fichero de datos mediante el comando `source()`, y exploramos los datos incorporados a la sesión de trabajo, representándolos espacialmente en 2 y 3 dimensiones.
+
+
+```{r fig.width=12,fig.height=6,fig.align="center"}
+source("altitud.r") # Leemos el fichero
+attach(altitud)
+plot(x,y,type="n") # Representación 2D de los datos
+text(x,y,alt,cex=0.85)
+scatterplot3d(x,y,alt) # Representación 3D de los datos
+detach(altitud)
+```
+
+Para una mejor interpretación, también podemos representarlos mediante `plot.geodata()` del paquete *geoR*, transformando previamente los datos a un objeto de clase *geodata*.
+
+```{r fig.width=4,fig.height=4,fig.align="center"}
+alt.geo<-as.geodata(altitud)
+plot(alt.geo)
+```
+
+Con el primero de los cuatro gráficos anteriores ya podemos detectar que hay cierta tendencia, pues al ver los cuartiles por colores, diferenciamos que están agrupados por zonas (en lugar de todos mezclados arbitrariamente). Por ejemplo, tenemos que los menores valores de altura, correspondientes a los círculos azules, se agrupan en valores centrados de la coordenada *X* y valores altos de la *Y*; o las x's rojas, correspondientes a los mayores valores de altura, que se agrupan en valores bajos de la coordenada *Y*.
+
+En el gráfico superior derecho está representada la coordenada *Y* de los puntos observados respecto a su altura, por lo que de nuevo vemos que los puntos con alturas mayores corresponden generalmente a valores inferiores de la coordenada *Y*. El gráfico inferior derecho corresponde al histograma de las alturas.
+
+## Estudio de la tendencia y de la estructura del variograma
+
+La interpolación geoestadística se basa en el supuesto de que no hay una tendencia fuerte en los valores de la muestra. En los casos en que existe una tendencia, como este, se supone que los valores están compuestos por dos componentes: una superficie de tendencia determinista más un proceso estocástico estacionario, de modo que cualquier método de interpolación ha de incluir ambos componentes para ser realista.
+
+La determinación de superficies de tendencia puede realizarse con varias funciones del paquete *spatial*. Las superficies de tendencia polinomiales se ajustan por mínimos cuadrados mediante el comando `surf.ls()`, y puede evaluarse en un grid sobre una región con `trmat()`. Probamos con diferentes grados del polinomio hasta ver que ya no hay cambios considerables, y pensamos que en este caso, polinomios de grado 3 o 4 podrían ser adecuados. Utilizamos el de grado 3 y representamos a continuación la superficie de tendencia:
+
+```{r, warning=FALSE,message=FALSE, fig.width=9, fig.height=4, fig.align="center"}
+# Cálculo de superficies de tendencia
+alt.ls<-surf.ls(3,altitud$x,altitud$y,altitud$alt) # polinomio de superficie de grado 3
+alt.trsurf<-trmat(alt.ls, 0, 6.5, 0, 6.5, 100) # evaluamos la superfice de tendencia en un grid.
+
+# Representación de superficies de tendencia
+par(mfrow=c(1,2))
+contour(alt.trsurf)
+points(altitud$x,altitud$y,pch=20)
+image(alt.trsurf)
+points(altitud$x,altitud$y,pch=20)
+```
+
+```{r, warning=FALSE,message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+par(mfrow=c(1,1),mar=c(2,0,3,1))
+persp(alt.trsurf,main="superficie de tendencia",
+      xlab="x",ylab="y",theta=120,phi=20,col=7)
+```
+
+Los valores de las muestras individuales no coinciden con el valor de la tendencia en cualquier lugar especificado. Obtenemos esas diferencias (residuos) eliminando la tendencia y aplicando después los métodos de interpolación ordinarios.
+
+```{r, warning=FALSE,message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Eliminación de tendencias
+alt.sin<-altitud[,3]-predict(alt.ls,altitud[,1],altitud[,2])
+alts.geo<-alt.geo
+alts.geo$data<-alt.sin
+plot.geodata(alts.geo)
+```
+
+El objeto $\texttt{alt.sin}$ corresponde a los residuos, pues es la diferencia entre los valores de la altura observados y las predicciones de alturas para las coordenadas *X* e *Y* que tenemos.
+
+Tal como esperábamos, en el primero de los cuatro gráficos anteriores ya no detectamos tendencia, pues teniendo los cuartiles por colores, vemos que se encuentran todos distribuidos arbitrariamente. Entonces, tras eliminar la tendencia observada, analizamos la variabilidad residual y estimamos el variograma. El variograma de un proceso espacial estacionario es una función que expresa la varianza de la diferencia que hay entre dos variables aleatorias en función de la distancia.
+
+La estimación del variograma empírico se realiza con el comando `variog()` del paquete *geoR*. Con el argumento *estimator.type="modulus"* indicamos que utilizamos el estimador robusto, pues es preferible al evitar el efecto de los extremos sobre la media.
+
+```{r, warning=FALSE, message=FALSE, fig.width=12, fig.height=5, fig.align="center"}
+plot(variog(alts.geo,estimator.type="modulus",messages=F),pch=20)
+```
+  
+Nos fijaremos en el crecimiento del variograma a corta distancia. Para ello, hay que representar y ajustar el comportamiento inicial, que en este caso vemos que podríamos considerarlo hasta una distancia de 3. Hemos probado con diferentes amplitudes de los intervalos del variograma, pues con demasiados intervalos tendríamos mucho ruido, y demasiado pocos resultaría complejo más adelante realizar el ajuste. En este caso, decidimos utilizar intervalos de amplitud 0.4.
+
+```{r, warning=FALSE,message=FALSE, fig.width=12, fig.height=5, fig.align="center"}
+alts.v1<-variog(alts.geo,uvec=seq(0,3,.4),max.dist=3,
+                estimator.type="modulus",messages=F)
+plot(alts.v1,pch=20)
+```
+
+Vemos que los valores iniciales del alféizar (es decir, el valor en el que el semivariograma se estabiliza) y el rango (la distancia a la que se alcanza el alféizar) son aproximadamente 400 y 3, respectivamente.
+
+Sin embargo, la estimación obtenida del variograma no podemos utilizarla directamente para la predicción espacial, sino que tenemos que buscar un modelo válido de semivariograma que se aproxime a la dependencia espacial encontrada por el semivariograma empírico, seleccionando aquella que mejor describa el comportamiento observado. Esta búsqueda de un modelo de variograma válido se realiza estimando los variogramas de diferentes familias, como el lineal, esférico, exponencial, cuadrático racional, ondulado, potencial y Gaussiano.
+
+A continuación, realizamos el ajuste de máxima verosimilitud mediante el comando `likfit()`, indicando en el argumento *ini* los valores iniciales para el alféizar y el rango que hemos considerado al ver la gráfica del variograma empírico. Además, lo hacemos para diferentes familias a través del argumento *cov.model*.
+
+Hay familias con parámetros adicionales. Por ejemplo, las familias exponencial y *matern* tienen el parámetro *kappa*, que regula la forma de crecimiento de la curva y puede tomar valores entre 0 y 2. Probamos entonces también con distintos valores de ese parámetro.
+
+```{r, warning=FALSE,message=FALSE, fig.width=12, fig.height=5, fig.align="center"}
+# Estimación del variograma sin tendencia
+alts.exp.ml<-likfit(geodata=alts.geo,ini=c(400,3),messages=F)
+alts.sph.ml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="sph",messages=F)
+alts.mat.ml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="mat",kappa=1.5,messages=F)
+alts.mat2.ml<-likfit(geodata=alts.geo,ini=c(400,3),
+                     cov.model="mat",kappa=1,fix.nugget=T,messages=F)
+alts.cir.ml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="cir",messages=F)
+alts.gau.ml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="gau",messages=F)
+alts.cub.ml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="cub",messages=F)
+alts.pow.ml<-likfit(geodata=alts.geo,ini=c(400,3),
+                    cov.model="powered.exponential",kappa=1.75,messages=F)
+alts.pow2.ml<-likfit(geodata = alts.geo,ini=c(400,3),
+                     cov.model="powered.exponential",kappa=1.75,fix.nugget=T,messages=F)
+plot(alts.v1,pch=20, main="Estimación variograma sin tendencia-método ML")
+lines(alts.pow2.ml,max.dist=3,lwd=2,col='red')
+lines(alts.mat2.ml,max.dist=3,lwd=2,col='blue')
+lines(alts.pow.ml,max.dist=3,lwd=2,col='green')
+lines(alts.mat.ml,max.dist=3,lwd=2,col='yellow')
+lines(alts.cub.ml,max.dist=3,lwd=2,col='orange')
+lines(alts.gau.ml,max.dist=3,lwd=2,col='cyan')
+lines(alts.cir.ml,max.dist=3,lwd=2,col='grey')
+lines(alts.exp.ml,max.dist=3,lwd=2,col='magenta')
+lines(alts.sph.ml,max.dist=3,lwd=2,col='pink')
+```
+
+Pensamos que las mejores familias de curvas que funcionan son esférica ($\texttt{alts.sph.ml}$) y cúbica ($\texttt{alts.cub.ml}$).
+
+Una vez hemos decidido qué familias de curvas funcionan mejor, la estimación de los parámetros puede realizarse por diferentes métodos. Además del de máxima verosimilitud (ML), que es el he hemos utilizado para determinar la familia, podemos recurrir a los métodos de máxima verosimilitud restringida (RML), mínima norma cuadrática, mínimos cuadrados (OLS) o mínimos cuadrados generalizados (WLS). Los ajustes de mínimos cuadrados los obtendremos con el comando `variofit()`. 
+
+Realizamos diferentes métodos con ambas familias y vemos qué método y familia se ajusta mejor a nuestros datos:
+
+```{r, warning=FALSE,message=FALSE, fig.width=6, fig.height=4, fig.align="center"}
+par(mfrow=c(1,2))
+# alts.sph.ml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="sph",messages=F)
+alts.sph.rml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="sph",
+                     method='RML',messages=F)
+alts.sph.ols<-variofit(vario=alts.v1,ini=c(400,3),cov.model="sph",
+                       weights="equal",minimisation.function="optim",messages=F)
+alts.sph.wls<-variofit(vario=alts.v1,ini=c(400,3),cov.model="sph",
+                       weights="npairs",messages=F)
+plot(alts.v1,main="esférico",pch=20)
+lines(alts.sph.ml,max.dist=3,lwd=2)
+lines(alts.sph.rml,max.dist=3,lwd=2,lty=2)
+lines(alts.sph.ols,max.dist=3,lwd=2,lty=3)
+lines(alts.sph.wls,max.dist=3,lwd=2,lty=4)
+legend("bottomright",legend=c('ML','RML','OLS','WLS'),lty=c(1,2,3,4))
+
+# alts.cub.ml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="cub",messages=F)
+alts.cub.rml<-likfit(geodata=alts.geo,ini=c(400,3),cov.model="cub",method='RML',messages=F)
+alts.cub.ols<-variofit(vario=alts.v1,ini=c(400,3),cov.model="cub",weights="equal",
+                       minimisation.function="optim",messages=F)
+alts.cub.wls<-variofit(vario=alts.v1,ini=c(400,3),
+                       cov.model="cub",weights="npairs",messages=F)
+plot(alts.v1,main="cúbico",pch=20)
+lines(alts.cub.ml,max.dist=3,lwd=2)
+lines(alts.cub.rml,max.dist=3,lwd=2,lty=2)
+lines(alts.cub.ols,max.dist=3,lwd=2,lty=3)
+lines(alts.cub.wls,max.dist=3,lwd=2,lty=4)
+
+legend("bottomright",legend=c('ML','RML','OLS','WLS'),lty=c(1,2,3,4))
+par(mfrow=c(1,1))
+```
+
+Vemos que dada una familia, los distintos métodos para buscar la estimación de los parámetros óptima dan como resultado curvas muy similares. Decidimos trabajar de ahora en adelante con la familia de curvas cúbica y el método de mínimos cuadrados generalizados (este es, el guardado en $\texttt{alts.cub.wls}$), así como con la familia esférica, también con el método de mínimos cuadrados generalizados ($\texttt{alts.sph.wls}$). Así, compararemos las predicciones que obtengamos.
+
+## Predicción de la altitud del terreno
+
+Una vez determinada la superficie de tendencia, la eliminamos y analizamos los residuos mediante kriging ordinario. Recordemos que la superficie $\texttt{alt.ls}$ es el ajuste de una superficie polinomial de grado 3, y los residuos los hemos guardado en $\texttt{alts.geo}$.
+
+Ya realizada la predicción kriging sobre los residuos, el proceso completo es la suma de la predicción con la tendencia (función `evaltend()`).
+
+El objeto $\texttt{loci}$ contiene todos los puntos sobre los que vamos a realizar predicciones. Decidimos predecir en 4356 puntos (un grid de 66x66), aunque únicamente nos interesa el punto de coordenadas (3,3). Cada punto de la cuadrícula estimada tiene un error asociado, y el tamaño probable de este error se describe mediante el error estándar de kriging, que se interpreta generalmente como la desviación típica de predicción. Entonces, una estimación de kriging produce dos mapas: uno para la estimación y otro de los errores estándar. 
+
+```{r, warning=FALSE,message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+loci<-expand.grid(seq(0,6.5,by=0.1),seq(0,6.5,by=0.1))
+evaltend<-function(superf,puntos){
+  predict(superf,puntos[,1],puntos[,2])}
+
+# esférico
+kc1<-krige.conv(alts.geo,locations=loci,krige=krige.control(
+  cov.pars=alts.sph.wls$cov.pars,nugget=alts.sph.wls$nugget))
+image(kc1,loc=loci,val=kc1$predict+evaltend(alt.ls,loci),
+  main='estimación kriging \n familia esférica')
+image(kc1,loc=loci,val=sqrt(kc1$krige.var),
+  main='error estándar \n familia esférica')
+```
+
+```{r, warning=FALSE,message=FALSE, fig.width=5, fig.height=5, fig.align="center"}
+par(mfrow=c(1,2),mar=c(2,0,3,1))
+persp(kc1,loc=loci,val=kc1$predict+evaltend(alt.ls,loci),col=7,
+  main='estimación kriging \n familia esférica',phi=30,theta=45)
+persp(kc1,loc=loci,val=sqrt(kc1$krige.var),col=7,phi=30,theta=45,
+  main='error estándar \n familia esférica')
+par(mfrow=c(1,1))
+```
+
+
+```{r, warning=FALSE,message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# cúbico
+kc2<-krige.conv(alts.geo,locations=loci,krige=krige.control(
+  cov.pars=alts.cub.wls$cov.pars,nugget=alts.cub.wls$nugget))
+image(kc2,loc=loci,val=kc2$predict+evaltend(alt.ls,loci),
+  main='estimación kriging \n familia cúbica')
+image(kc2,loc=loci,val=sqrt(kc2$krige.var),
+  main='error estándar \n familia cúbica')
+```
+
+```{r, warning=FALSE,message=FALSE, fig.width=5, fig.height=5, fig.align="center"}
+par(mfrow=c(1,2),mar=c(2,0,3,1))
+persp(kc2,loc=loci,val=kc2$predict+evaltend(alt.ls,loci),col=7,
+  main='estimación kriging \n familia cúbica',phi=30,theta=45)
+persp(kc2,loc=loci,val=sqrt(kc2$krige.var),col=7,phi=30,theta=45,
+  main='error estándar \n familia cúbica')
+par(mfrow=c(1,1))
+```
+
+En los mapas de "error estándar" en 2D vemos más claros los puntos en los que el error estándar es menor, y más oscuros en los que es mayor. Así pues, en los puntos en los que teníamos datos de partida se produce menor error, como cabía esperar. Además, si comparamos los mapas de "error estándar" realizados con ambas familias, podemos apreciar que los errores de la familia esférica son generalmente menores que los de la cúbica.
+
+Sin embargo, hay que tener en cuanta que hemos realizado el kriging asumiendo que conocíamos el variograma, pero realmente no es así, sino que lo hemos estimado. Esto implica que nuestra incertidumbre sobre la predicción es mayor; no es únicamente la del krilling, sino también la del variograma, y esta no podemos calcularla.
+
+```{r warning=FALSE,message=FALSE}
+which(loci$Var1==3 & loci$Var2==3)
+```
+
+
+El punto (3,3) que nos interesa predecir corresponde a la posición 2011 del objeto $\texttt{loci}$. Calculamos a continuación el intervalo de predicción al 95% con el kriging sobre los residuos realizado. Para ello, hacemos la predicción sobre los residuos y le sumamos la evaluación de la tendencia. Además, suponemos que la variable tiene un comportamiento aproximadamente normal, de modo que tras quitar la tendencia, asumimos que los residuos son normales en cada uno de los puntos. Sin embargo, esto no lo podemos verificar, pues en cada punto esa normal de la que procede puede ser distinta, y además no se trata de distribuciones normales independientes, sino que están ligadas por el variograma.
+
+```{r, warning=FALSE,message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Intervalo de predicción 0.95 con familia esférica
+predi1<-function(i)
+c(kc1$predict[i]+evaltend(alt.ls,loci[i,])+qnorm(0.025)*sqrt(kc1$krige.var[i]),
+  kc1$predict[i]+evaltend(alt.ls,loci[i,])+qnorm(0.975)*sqrt(kc1$krige.var[i]))
+predi1(2011)
+```
+
+
+```{r, warning=FALSE,message=FALSE, fig.width=4, fig.height=4, fig.align="center"}
+# Intervalo de predicción 0.95 con familia cúbica
+predi2<-function(i)
+c(kc2$predict[i]+evaltend(alt.ls,loci[i,])+qnorm(0.025)*sqrt(kc2$krige.var[i]),
+  kc2$predict[i]+evaltend(alt.ls,loci[i,])+qnorm(0.975)*sqrt(kc2$krige.var[i]))
+predi2(2011)
+```
+
+Vemos que ambos intervalos de predicción al 95% calculados para el punto de coordenadas (3,3) son bastante similares.
+
+
